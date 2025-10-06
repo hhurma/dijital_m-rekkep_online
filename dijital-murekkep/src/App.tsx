@@ -95,11 +95,7 @@ function drawGridOnCanvas(
 }
 
 // Layer panel komponenti
-function LayerPanel({ isVisible, width, onWidthChange }: {
-	isVisible: boolean;
-	width: number;
-	onWidthChange: (width: number) => void
-}) {
+function LayerPanel({ isVisible }: { isVisible: boolean }) {
 	const editor = useEditor()
 	const shapeIds = useValue(
 		'shapeIds',
@@ -107,9 +103,10 @@ function LayerPanel({ isVisible, width, onWidthChange }: {
 		[editor]
 	)
 
+	const [panelWidth, setPanelWidth] = useState(200)
 	const isResizingRef = useRef(false)
 	const startXRef = useRef(0)
-	const startWidthRef = useRef(width)
+	const startWidthRef = useRef(200)
 	const rafIdRef = useRef<number | null>(null)
 
 	const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -118,13 +115,9 @@ function LayerPanel({ isVisible, width, onWidthChange }: {
 
 		isResizingRef.current = true
 		startXRef.current = e.clientX
-		startWidthRef.current = width
+		startWidthRef.current = panelWidth
 
-		// Sadece resize handle element'ine cursor uygula
-		const handle = e.currentTarget as HTMLElement
-		handle.style.cursor = 'ew-resize'
-
-		let lastWidth = width
+		let lastWidth = panelWidth
 
 		const handleMouseMove = (moveEvent: MouseEvent) => {
 			if (!isResizingRef.current) return
@@ -143,14 +136,13 @@ function LayerPanel({ isVisible, width, onWidthChange }: {
 				// Only update if width actually changed
 				if (newWidth !== lastWidth) {
 					lastWidth = newWidth
-					onWidthChange(newWidth)
+					setPanelWidth(newWidth)
 				}
 			})
 		}
 
 		const handleMouseUp = () => {
 			isResizingRef.current = false
-			handle.style.cursor = 'ew-resize' // Hover için bırak
 
 			// Cancel any pending animation frame
 			if (rafIdRef.current) {
@@ -164,14 +156,14 @@ function LayerPanel({ isVisible, width, onWidthChange }: {
 
 		document.addEventListener('mousemove', handleMouseMove, { passive: false })
 		document.addEventListener('mouseup', handleMouseUp)
-	}, [width, onWidthChange])
+	}, [panelWidth])
 
 	if (!isVisible) return null
 
 	return (
 		<div
 			className="layer-panel"
-			style={{ width: `${width}px` }}
+			style={{ width: `${panelWidth}px` }}
 		>
 			<div className="layer-panel-title">Şekiller</div>
 			<ShapeList
@@ -399,7 +391,7 @@ function MenuIntegration() {
   return null
 }
 
-// [1] UI overrides: aksiyonları kaydet ve toolbar’a ekle
+// [1] UI overrides: aksiyonları kaydet ve toolbar'a ekle
 const uiOverrides: TLUiOverrides = {
   actions(editor, actions) {
     actions['dm-save-sdm'] = {
@@ -477,62 +469,84 @@ function CustomToolbar({ isLayerPanelVisible, setIsLayerPanelVisible, ...props }
       <DefaultToolbarContent />
 
       {/* Layer panel toggle butonu */}
-      <TldrawUiMenuGroup id="dm-layer">
-        <TldrawUiMenuItem
-          id="dm-layer-toggle"
-          label={isLayerPanelVisible ? "Layer Panel'i Gizle" : "Layer Panel'i Göster"}
-          icon="layers"
-          readonlyOk
-          onSelect={() => setIsLayerPanelVisible(!isLayerPanelVisible)}
-        />
-      </TldrawUiMenuGroup>
-      {/* Grid seçici butonları */}
-      <TldrawUiMenuGroup id="dm-grid">
-        <TldrawUiMenuItem
-          id="dm-grid-none"
-          label="Grid Yok"
-          icon="grid"
-          readonlyOk
-          onSelect={() => setGridSettings({ ...gridSettings, gridType: GridType.NONE })}
-        />
-        <TldrawUiMenuItem
-          id="dm-grid-squared"
-          label="Kareli Kağıt"
-          icon="grid"
-          readonlyOk
-          onSelect={() => setGridSettings({ ...gridSettings, gridType: GridType.SQUARED })}
-        />
-        <TldrawUiMenuItem
-          id="dm-grid-ruled"
-          label="Çizgili Kağıt"
-          icon="grid"
-          readonlyOk
-          onSelect={() => setGridSettings({ ...gridSettings, gridType: GridType.RULED })}
-        />
-        <TldrawUiMenuItem
-          id="dm-grid-settings"
-          label="Grid Ayarları"
-          icon="settings"
-          readonlyOk
-          onSelect={() => {
-            // Grid ayarları panelini açmak için basit bir alert kullanacağız
-            const gridSize = prompt('Grid boyutu (px):', gridSettings.gridSize.toString())
-            const lineWidth = prompt('Çizgi kalınlığı:', gridSettings.lineWidth.toString())
-            const lineColor = prompt('Çizgi rengi (hex):', gridSettings.lineColor)
-            const majorLineWidth = prompt('Ana çizgi kalınlığı:', gridSettings.majorLineWidth.toString())
+      <button
+        onClick={() => setIsLayerPanelVisible(!isLayerPanelVisible)}
+        style={{
+          padding: '8px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          background: 'white',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontSize: '14px'
+        }}
+        title={isLayerPanelVisible ? "Layer Panel'i Gizle" : "Layer Panel'i Göster"}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7"/>
+          <rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </button>
 
-            if (gridSize && lineWidth && lineColor && majorLineWidth) {
-              setGridSettings({
-                ...gridSettings,
-                gridSize: parseInt(gridSize),
-                lineWidth: parseFloat(lineWidth),
-                lineColor,
-                majorLineWidth: parseFloat(majorLineWidth)
-              })
-            }
-          }}
-        />
-      </TldrawUiMenuGroup>
+      {/* Grid seçici butonları - doğrudan toolbar'da */}
+      <select
+        value={gridSettings.gridType}
+        onChange={(e) => setGridSettings({ ...gridSettings, gridType: e.target.value as GridType })}
+        style={{
+          padding: '6px 8px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          background: 'white',
+          cursor: 'pointer',
+          fontSize: '14px',
+          minWidth: '120px'
+        }}
+        title="Grid türü seçin"
+      >
+        <option value={GridType.NONE}>Grid Yok</option>
+        <option value={GridType.SQUARED}>Kareli Kağıt</option>
+        <option value={GridType.RULED}>Çizgili Kağıt</option>
+      </select>
+
+      <button
+        onClick={() => {
+          const gridSize = prompt('Grid boyutu (px):', gridSettings.gridSize.toString())
+          const lineWidth = prompt('Çizgi kalınlığı:', gridSettings.lineWidth.toString())
+          const lineColor = prompt('Çizgi rengi (hex):', gridSettings.lineColor)
+          const majorLineWidth = prompt('Ana çizgi kalınlığı:', gridSettings.majorLineWidth.toString())
+
+          if (gridSize && lineWidth && lineColor && majorLineWidth) {
+            setGridSettings({
+              ...gridSettings,
+              gridSize: parseInt(gridSize),
+              lineWidth: parseFloat(lineWidth),
+              lineColor,
+              majorLineWidth: parseFloat(majorLineWidth)
+            })
+          }
+        }}
+        style={{
+          padding: '8px',
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          background: 'white',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          fontSize: '14px'
+        }}
+        title="Grid ayarları"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
       {/* sona custom aksiyonları ekle */}
       {actions['dm-save-sdm'] && (
         <TldrawUiMenuItem {...(actions as any)['dm-save-sdm']} />
@@ -838,7 +852,7 @@ function App() {
             MainMenu: CustomMainMenu,
             Toolbar: (props: any) => <CustomToolbar {...props} isLayerPanelVisible={isLayerPanelVisible} setIsLayerPanelVisible={setIsLayerPanelVisible} />,
             Grid: GridWrapper,
-            InFrontOfTheCanvas: () => <LayerPanel isVisible={isLayerPanelVisible} width={layerPanelWidth} onWidthChange={setLayerPanelWidth} />
+            InFrontOfTheCanvas: () => <LayerPanel isVisible={isLayerPanelVisible} />
           }}
           getShapeVisibility={(s) =>
             s.meta.force_show ? 'visible' : s.meta.hidden ? 'hidden' : 'inherit'
